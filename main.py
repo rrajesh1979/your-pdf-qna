@@ -40,18 +40,16 @@ def main():
 
     llm = setup_llm()
 
-    compression_retriever = setup_contextual_compression_retriever(faiss_vector_store, llm)
+    related_content_retriever = setup_related_content_retriever(faiss_vector_store, llm)
 
-    # show user input
     user_question = st.text_input("What do you want to know from your content?")
     vector_search_results = None
     if user_question:
-        vector_search_results = compression_retriever.get_relevant_documents(user_question)
+        vector_search_results = related_content_retriever.get_relevant_documents(user_question)
         display_relevant_doc_search_results(vector_search_results)
+        st.write(vector_search_results)
     else:
         st.write("Please enter a question to search for.")
-
-    st.write(vector_search_results)
 
 
 def split_pdf(pdf, split_docs):
@@ -121,7 +119,7 @@ def display_relevant_doc_search_results(vector_search_results):
             """))
 
 
-def setup_contextual_compression_retriever(faiss_vector_store, llm):
+def setup_related_content_retriever(faiss_vector_store, llm):
     compressor = LLMChainExtractor.from_llm(llm)
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=compressor,

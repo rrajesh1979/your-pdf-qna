@@ -13,6 +13,7 @@ streamlit = "^1.12.0"
 langchain = "^0.0.159"
 tiktoken = "^0.3.3"
 ipython = "^8.13.2"
+pypdf2 = "^3.0.1"
 
 [build-system]
 requires = ["poetry-core"]
