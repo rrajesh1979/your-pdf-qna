@@ -14,6 +14,7 @@ langchain = "^0.0.159"
 tiktoken = "^0.3.3"
 ipython = "^8.13.2"
 pypdf2 = "^3.0.1"
+openai = "^0.27.6"
 
 [build-system]
 requires = ["poetry-core"]
