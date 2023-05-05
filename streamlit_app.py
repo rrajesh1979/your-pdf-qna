@@ -1,7 +1,8 @@
 from dotenv import load_dotenv
 import streamlit as st
 from PyPDF2 import PdfReader
-from langchain.text_splitter import CharacterTextSplitter
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import CharacterTextSplitter, RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
@@ -11,31 +12,24 @@ from langchain.callbacks import get_openai_callback
 
 def main():
     load_dotenv()
-    st.set_page_config(page_title="Ask your PDF")
-    st.header("Ask your PDF 💬")
+    st.set_page_config(page_title="Q&A over your own data", page_icon="📝")
+    st.header("Q&A over your own data 💬")
+    st.markdown(
+        """
+        # Welcome to AI enabled Q&A App! 👋
+        """
+    )
 
     # upload file
     pdf = st.file_uploader("Upload your PDF", type="pdf")
 
     # extract the text
     if pdf is not None:
-        pdf_reader = PdfReader(pdf)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
+        pages = read_pdf(pdf)
+        split_docs = split_into_chunks(pages)
+        print(f'Number of chunks of data: {len(split_docs)}')
 
-        # split into chunks
-        text_splitter = CharacterTextSplitter(
-            separator="\n",
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len
-        )
-        chunks = text_splitter.split_text(text)
-
-        # create embeddings
-        embeddings = OpenAIEmbeddings()
-        knowledge_base = FAISS.from_texts(chunks, embeddings)
+        knowledge_base = create_faiss_vector_store(split_docs)
 
         # show user input
         user_question = st.text_input("Ask a question about your PDF:")
@@ -49,6 +43,31 @@ def main():
                 print(cb)
 
             st.write(response)
+
+
+def read_pdf(pdf):
+    pages = None
+    if pdf is not None:
+        loader = PyPDFLoader(pdf)
+        pages = loader.load_and_split()
+    else:
+        st.write("Please upload a PDF file.")
+    return pages
+
+
+def split_into_chunks(pages):
+    chunk_size_limit = 1000
+    max_chunk_overlap = 0
+    separator = "\n"
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size_limit, chunk_overlap=max_chunk_overlap)
+    split_docs = text_splitter.split_documents(pages)
+    return split_docs
+
+
+def create_faiss_vector_store(split_docs):
+    embeddings = OpenAIEmbeddings()
+    faiss_vector_store = FAISS.from_documents(split_docs, embeddings)
+    return faiss_vector_store
 
 
 if __name__ == '__main__':
