@@ -44,21 +44,14 @@ def main():
 
     # show user input
     user_question = st.text_input("What do you want to know from your content?")
+    vector_search_results = None
     if user_question:
         vector_search_results = compression_retriever.get_relevant_documents(user_question)
         display_relevant_doc_search_results(vector_search_results)
     else:
         st.write("Please enter a question to search for.")
 
-    prompt = setup_prompt_template()
-    chain_type_kwargs = {"prompt": prompt}
-
-    chain = setup_langchain(chain_type_kwargs, compression_retriever, llm)
-
-    result = chain(user_question)
-    output_text = print_result(user_question, result)
-
-    st.write(output_text)
+    st.write(vector_search_results)
 
 
 def split_pdf(pdf, split_docs):
