@@ -30,11 +30,14 @@ def main():
     st.sidebar.success("Select a demo above.")
     pdf = st.file_uploader("Upload your PDF", type="pdf")
 
+    split_docs = None
     if pdf is not None:
         loader = PyPDFLoader(pdf)
         pages = loader.load_and_split()
         split_docs = split_into_chunks(pages)
         print(f'Number of chunks of data: {len(split_docs)}')
+    else:
+        st.write("Please upload a PDF file.")
 
         measure_cost_of_embeddings(split_docs)
 
