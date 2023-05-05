@@ -28,9 +28,40 @@ def main():
         """
     )
     st.sidebar.success("Select a demo above.")
-    pdf = st.file_uploader("Upload your PDF", type="pdf")
 
     split_docs = None
+
+    pdf = st.file_uploader("Upload your PDF", type="pdf")
+    split_docs = split_pdf(pdf, split_docs)
+
+    measure_cost_of_embeddings(split_docs)
+
+    faiss_vector_store = create_faiss_vector_store(split_docs)
+
+    llm = setup_llm()
+
+    compression_retriever = setup_contextual_compression_retriever(faiss_vector_store, llm)
+
+    # show user input
+    user_question = st.text_input("What do you want to know from your content?")
+    if user_question:
+        vector_search_results = compression_retriever.get_relevant_documents(user_question)
+        display_relevant_doc_search_results(vector_search_results)
+    else:
+        st.write("Please enter a question to search for.")
+
+    prompt = setup_prompt_template()
+    chain_type_kwargs = {"prompt": prompt}
+
+    chain = setup_langchain(chain_type_kwargs, compression_retriever, llm)
+
+    result = chain(user_question)
+    output_text = print_result(user_question, result)
+
+    st.write(output_text)
+
+
+def split_pdf(pdf, split_docs):
     if pdf is not None:
         loader = PyPDFLoader(pdf)
         pages = loader.load_and_split()
@@ -38,32 +69,7 @@ def main():
         print(f'Number of chunks of data: {len(split_docs)}')
     else:
         st.write("Please upload a PDF file.")
-
-        measure_cost_of_embeddings(split_docs)
-
-        faiss_vector_store = create_faiss_vector_store(split_docs)
-
-        llm = setup_llm()
-
-        compression_retriever = setup_contextual_compression_retriever(faiss_vector_store, llm)
-
-        # show user input
-        user_question = st.text_input("What do you want to know from your content?")
-        if user_question:
-            vector_search_results = compression_retriever.get_relevant_documents(user_question)
-            display_relevant_doc_search_results(vector_search_results)
-        else:
-            st.write("Please enter a question to search for.")
-
-        prompt = setup_prompt_template()
-        chain_type_kwargs = {"prompt": prompt}
-
-        chain = setup_langchain(chain_type_kwargs, compression_retriever, llm)
-
-        result = chain(user_question)
-        output_text = print_result(user_question, result)
-
-        st.write(output_text)
+    return split_docs
 
 
 def setup_langchain(chain_type_kwargs, compression_retriever, llm):
