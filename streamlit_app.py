@@ -26,7 +26,7 @@ def main():
     # extract the text
     if pdf is not None:
         pdf_reader = PdfReader(pdf)
-        pages = [page.extractText() for page in pdf_reader.pages]
+        pages = [page.extract_text() for page in pdf_reader.pages]
         split_docs = split_into_chunks(pages)
         print(f'Number of chunks of data: {len(split_docs)}')
 
