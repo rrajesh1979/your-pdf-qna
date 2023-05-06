@@ -26,21 +26,17 @@ def main():
             measure_cost_of_embeddings(split_docs)
             knowledge_base = create_faiss_vector_store(split_docs)
             llm = setup_llm()
-            compression_retriever = setup_contextual_compression_retriever(knowledge_base, llm)
 
             user_question = st.text_input("Ask a question about your PDF:")
             if user_question:
-                vector_search_results = compression_retriever.get_relevant_documents(user_question)
+                vector_search_results = knowledge_base.similarity_search(user_question)
                 display_relevant_doc_search_results(vector_search_results)
-                prompt = setup_prompt_template()
-                chain_type_kwargs = {"prompt": prompt}
-                chain = setup_langchain(chain_type_kwargs, compression_retriever, llm)
+                chain = setup_langchain(llm)
                 with get_openai_callback() as cb:
-                    result = chain(user_question)
-                    response = format_result(user_question, result)
+                    result = chain.run(input_documents=vector_search_results, question=user_question)
                     print(cb)
 
-                st.write(response)
+                st.write(result)
 
 
 def init():
@@ -54,13 +50,12 @@ def init():
 
 
 def read_pdf(pdf_file):
-    from langchain.document_loaders import PyPDFLoader
+    from PyPDF2 import PdfReader
     pages = None
     if pdf_file is not None:
-        loader = PyPDFLoader(pdf_file)
-        pages = loader.load_and_split()
-        print('PDF loaded successfully.')
-        print(f'Number of pages: {len(pages)}')
+        pdf_reader = PdfReader(pdf_file)
+        pages = [page for page in pdf_reader.pages]
+        print(f'Number of pages in PDF: {len(pages)}')
     else:
         print(f'Please upload a PDF file.')
     return pages
@@ -68,16 +63,18 @@ def read_pdf(pdf_file):
 
 def split_into_chunks(pages):
     from langchain.text_splitter import RecursiveCharacterTextSplitter
-    chunk_size_limit = 1000
-    max_chunk_overlap = 0
-    separator = "\n"
+
+    text = ""
+    for page in pages:
+        text += page.extract_text()
+
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size_limit,
-        chunk_overlap=max_chunk_overlap,
-        separators=[separator]
+        chunk_size=1000,
+        chunk_overlap=0,
+        length_function=len
     )
-    split_docs = text_splitter.split_documents(pages)
-    print(f'Number of chunks of data: {len(split_docs)}')
+    split_docs = text_splitter.create_documents([text])
+    print(f'Number of chunks: {len(split_docs)}')
     return split_docs
 
 
@@ -108,76 +105,18 @@ def setup_llm():
     return llm
 
 
-def setup_contextual_compression_retriever(faiss_vector_store, llm):
-    from langchain.retrievers import ContextualCompressionRetriever
-    from langchain.retrievers.document_compressors import LLMChainExtractor
-    compressor = LLMChainExtractor.from_llm(llm)
-    compression_retriever = ContextualCompressionRetriever(
-        base_compressor=compressor,
-        base_retriever=faiss_vector_store.as_retriever()
-    )
-    print(f"Contextual compression retriever setup successfully.")
-    return compression_retriever
-
-
 def display_relevant_doc_search_results(results):
     for result in results:
-        print(
-            f""" Page:: {result.metadata['page']} \n 
-             Metadata:: {result.metadata['source']} \n
-              Content:: {result.page_content[:100]} \n
-            """)
+        print(f"Content:: {result.page_content[:100]}")
+        print("\n")
     print(f"Relevant documents retrieved successfully.")
 
 
-def setup_prompt_template():
-    from langchain.prompts.chat import (
-        ChatPromptTemplate,
-        SystemMessagePromptTemplate,
-        HumanMessagePromptTemplate,
-    )
-    system_template = """Use the following pieces of context to answer the users question.
-        Take note of the sources and include them in the answer in the format: "SOURCES: source1 source2", 
-        use "SOURCES" in capital letters regardless of the number of sources.
-        If you don't know the answer, just say that "I don't know", don't try to make up an answer.
-        ----------------
-        {summaries}"""
-    messages = [
-        SystemMessagePromptTemplate.from_template(system_template),
-        HumanMessagePromptTemplate.from_template("{question}")
-    ]
-    prompt = ChatPromptTemplate.from_messages(messages)
-    print(f"Prompt template setup successfully.")
-    return prompt
-
-
-def setup_langchain(chain_type_kwargs, compression_retriever, llm):
-    from langchain.chains import RetrievalQAWithSourcesChain
-    chain = RetrievalQAWithSourcesChain.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=compression_retriever,
-        return_source_documents=True,
-        chain_type_kwargs=chain_type_kwargs,
-        verbose=True
-    )
+def setup_langchain(llm):
+    from langchain.chains.question_answering import load_qa_chain
+    chain = load_qa_chain(llm, chain_type="stuff")
     print(f"Langchain setup successfully.")
     return chain
-
-
-def format_result(user_question, result):
-    from IPython.display import display, Markdown
-    output_text = f"""### Question: 
-  {user_question}
-  ### Answer: 
-  {result['answer']}
-  ### Sources: 
-  {result['sources']}
-  ### All relevant sources:
-  {' '.join(list(set([doc.metadata['source'] for doc in result['source_documents']])))}
-  """
-    display(Markdown(output_text))
-    return Markdown(output_text)
 
 
 if __name__ == '__main__':
